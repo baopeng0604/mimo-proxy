@@ -10,18 +10,25 @@ v1.4: 修复非流式模式下上游返回错误时的处理：检查状态码�
 import hashlib
 import json
 import logging
+import os
 import time
 from collections import OrderedDict
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
 # ─── 配置 ──────────────────────────────────────────────────────
-MIMO_API_BASE = "https://token-plan-cn.xiaomimimo.com/v1"
+# 显式指定 .env 为脚本所在目录下的文件（避免从其他目录启动时找不到）
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
+# 必须在 load_dotenv() 之后用 os.getenv 读取，才有 .env 中的值；否则是硬编码默认值
+MIMO_API_BASE = os.getenv("MIMO_API_BASE", "https://token-plan-cn.xiaomimimo.com/v1")
 LISTEN_HOST = "0.0.0.0"
 LISTEN_PORT = 8899
 CACHE_MAX_SIZE = 2000
@@ -400,6 +407,11 @@ routes = [
 app = Starlette(routes=routes, lifespan=lifespan)
 
 if __name__ == "__main__":
+    # Windows GBK 控制台无法编码 emoji，会导致 print 崩溃；强制用 UTF-8 输出
+    import sys
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     import uvicorn
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
     log.info("🚀 MiMo Proxy v1.4 on %s:%d → %s", LISTEN_HOST, LISTEN_PORT, MIMO_API_BASE)
