@@ -156,7 +156,95 @@ chmod +x start-proxy.sh start-proxy-uv.sh
 
 ---
 
-## 七、清理卸载
+## 七、Linux 服务器：部署为 systemd 服务（开机自启 + 崩溃自动重启）
+
+适合把代理长期跑在 Linux 服务器上，重启服务器自动拉起、进程崩溃自动恢复。
+脚本在仓库 `deploy/` 目录：`install.sh`（安装/更新）、`uninstall.sh`（卸载）。
+
+### 1. 获取脚本（在服务器上二选一）
+
+```bash
+# 方式 A：git clone 整个仓库（推荐，脚本在 deploy/ 目录里）
+git clone --depth 1 https://github.com/baopeng0604/mimo-proxy.git
+cd mimo-proxy
+
+# 方式 B：只上传脚本（在本地执行）
+scp deploy/install.sh deploy/uninstall.sh user@服务器IP:~/
+```
+
+### 2. 一键安装
+
+```bash
+sudo bash deploy/install.sh
+```
+
+脚本自动完成：克隆代码到 `/opt/mimo-proxy`（可用环境变量 `MIMO_PROXY_DIR` 改）→ 创建 `.venv` 装依赖 → 生成 `.env`（若不存在）→ 写 systemd 服务 `mimo-proxy` → 设置开机自启 → 启动并检查状态。
+
+### 3. 填写密钥（脚本只会在 `.env` 缺失时生成占位文件，必须填入真实值）
+
+```bash
+sudo nano /opt/mimo-proxy/.env
+```
+
+`MIMO_API_BASE` 必须与密钥类型匹配（`tp-` 用 `token-plan-cn` 地址，`sk-` 用 `api.xiaomimimo.com` 地址），改完重启：
+
+```bash
+sudo systemctl restart mimo-proxy
+```
+
+也可以在安装时直接带上：
+
+```bash
+sudo MIMO_API_KEY=tp-xxxxxxxx MIMO_API_BASE=https://token-plan-cn.xiaomimimo.com/v1 bash deploy/install.sh
+```
+
+### 4. 常用管理命令
+
+```bash
+systemctl status mimo-proxy        # 查看状态（含最近日志）
+journalctl -u mimo-proxy -f        # 实时日志
+journalctl -u mimo-proxy -n 100    # 最近 100 行
+sudo systemctl restart mimo-proxy  # 重启
+sudo systemctl stop mimo-proxy     # 停止
+sudo systemctl disable mimo-proxy  # 取消开机自启
+```
+
+### 5. 更新版本
+
+```bash
+cd /opt/mimo-proxy && sudo git pull && sudo systemctl restart mimo-proxy
+```
+
+或直接重跑 `sudo bash deploy/install.sh`（会自动 `git pull` + 重启）。
+
+### 6. 卸载
+
+```bash
+sudo bash deploy/uninstall.sh
+```
+
+### 7. 防火墙（可选）
+
+服务监听 `0.0.0.0:8899`，仅内网使用则无需放行；需公网访问时：
+
+```bash
+# ufw
+sudo ufw allow 8899/tcp
+# firewalld
+sudo firewall-cmd --permanent --add-port=8899/tcp && sudo firewall-cmd --reload
+```
+
+> ⚠️ 安全提醒：8899 暴露公网后，任何拿到你 API Key 的人都能借道调用小米 API（按量付费会扣费）。
+> 建议用防火墙把 8899 限制在可信 IP 段内。
+
+### 8. 客户端配置
+
+Base URL 改为服务器的地址：`http://<服务器IP>:8899/v1`，模型 `mimo-v2.5-pro`，
+API Key 填真实小米 key（代理透传鉴权）。
+
+---
+
+## 八、清理卸载
 
 直接删除整个 `mimo-proxy` 文件夹即可。虚拟环境（`.venv`）都在项目目录内，无全局污染。
 

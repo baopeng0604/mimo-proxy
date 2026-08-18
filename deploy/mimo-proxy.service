@@ -1,0 +1,29 @@
+# MiMo Proxy systemd 服务模板
+# install.sh 会按实际安装路径自动生成此文件到 /etc/systemd/system/mimo-proxy.service，
+# 本文件仅作参考，一般无需手动修改。
+#
+# 常用命令：
+#   systemctl status mimo-proxy      查看状态
+#   journalctl -u mimo-proxy -f      实时日志
+#   sudo systemctl restart mimo-proxy
+#   sudo systemctl stop mimo-proxy
+#   sudo systemctl disable mimo-proxy
+
+[Unit]
+Description=MiMo Reasoning Content Proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 服务运行用户，可改为专用用户（如 mimo-proxy）
+User=root
+WorkingDirectory=/opt/mimo-proxy
+ExecStart=/opt/mimo-proxy/.venv/bin/python /opt/mimo-proxy/mimo_proxy.py
+# 崩溃后自动重启（3 秒后重试）
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
