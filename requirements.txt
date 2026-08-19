@@ -2,3 +2,5 @@ fastapi>=0.100.0
 uvicorn>=0.20.0
 httpx>=0.24.0
 python-dotenv>=1.0.0
+# 网页控制台实时日志的 WebSocket 支持（uvicorn 需要其中一个 WebSocket 库才能处理升级握手）
+websockets>=12.0
