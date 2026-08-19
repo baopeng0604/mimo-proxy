@@ -417,7 +417,15 @@ if __name__ == "__main__":
     # ConnectionResetError (WinError 10054)。
     # 解决办法：仅 Windows 上通过自定义 loop 工厂切换到 Selector 事件循环
     # （见 mimo_loop.py）。Linux/macOS 默认即 Selector，无需任何处理。
-    uvicorn_kwargs = {"host": LISTEN_HOST, "port": LISTEN_PORT, "log_level": "info"}
+    # 优雅退出超时：uvicorn 默认 graceful shutdown 会无限等待在途连接
+    # （timeout_graceful_shutdown=None），Windows 上按 Ctrl+C 后可能永远
+    # 无法退出。这里限制为 5 秒，超时后强制退出。
+    uvicorn_kwargs = {
+        "host": LISTEN_HOST,
+        "port": LISTEN_PORT,
+        "log_level": "info",
+        "timeout_graceful_shutdown": 5,
+    }
     if sys.platform == "win32":
         uvicorn_kwargs["loop"] = "mimo_loop:selector_loop_factory"
 

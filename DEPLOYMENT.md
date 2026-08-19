@@ -154,6 +154,7 @@ chmod +x start-proxy.sh start-proxy-uv.sh
 | 想临时绕过代理                           | 模型改为 `mimo-v2.5`（标准版校验宽松），可直连官方接口                 |
 | 启动时 MIMO_API_BASE 不是 .env 里的值    | 确认 `.env` 在项目根目录（与 `mimo_proxy.py` 同级）；改动后重启         |
 | Windows 日志刷 `ConnectionResetError: [WinError 10054]` | 无害噪音，代理已内置修复，详见「七、平台差异说明」；重启代理生效 |
+| 按 Ctrl+C 显示 "Shutting down" 后无法退回命令行 | 已修复：uvicorn 默认优雅退出会无限等待在途连接（`timeout_graceful_shutdown=None`），代理已设为 **5 秒超时**，超时自动强制退出；重启代理生效 |
 
 ---
 
@@ -170,6 +171,8 @@ chmod +x start-proxy.sh start-proxy-uv.sh
 > 细节：`mimo_proxy.py` 的 `__main__` 块里，只有 `sys.platform == "win32"` 才会在 `uvicorn.run(**)` 参数中加入 `loop="mimo_loop:selector_loop_factory"`；`mimo_loop.py` 也只是在 Windows 上才会被加载。因此 **Linux / macOS 上这些代码直接跳过，不会引入任何行为变化**，部署在 Linux systemd 服务（见下节）时无需任何额外处理。
 >
 > 备注：如果 Windows 上仍想观察该噪音是否出现，可查看启动日志——正常情况下连接断开后日志只有 uvicorn 的 access log，不再有 `Exception in callback` / `WinError 10054` traceback。
+>
+> 另：按 **Ctrl+C 停止**时，uvicorn 默认的优雅退出会**无限等待在途连接**（`timeout_graceful_shutdown=None`），Windows 上表现为打印 "Shutting down" 后无法退出。代理已将优雅退出超时设为 **5 秒**（`timeout_graceful_shutdown=5`），超时后自动取消残留任务并退出（实测 Ctrl+C 后约 5 秒内干净退出，exit 0）。该设置在**所有平台生效**（Linux systemd 下由 `systemctl stop` 正常处理，不受影响）。
 
 ---
 
