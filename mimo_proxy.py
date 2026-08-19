@@ -412,15 +412,14 @@ if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-    # Windows 下默认的 Proactor 事件循环在连接关闭时会在回调里对已关闭的
-    # socket 再次 shutdown，抛出无害但刷屏的 ConnectionResetError (WinError 10054)。
-    # 换成 Selector 事件循环可消除该噪音（Linux 不受影响，无需处理）。
+    # Windows 下 uvicorn 0.36+ 强制使用 Proactor 事件循环，连接关闭时会对
+    # 已关闭的 socket 再次 shutdown，抛出无害但刷屏的
+    # ConnectionResetError (WinError 10054)。
+    # 解决办法：仅 Windows 上通过自定义 loop 工厂切换到 Selector 事件循环
+    # （见 mimo_loop.py）。Linux/macOS 默认即 Selector，无需任何处理。
+    uvicorn_kwargs = {"host": LISTEN_HOST, "port": LISTEN_PORT, "log_level": "info"}
     if sys.platform == "win32":
-        import asyncio
-        try:
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        except Exception:
-            pass
+        uvicorn_kwargs["loop"] = "mimo_loop:selector_loop_factory"
 
     import uvicorn
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
@@ -451,4 +450,4 @@ if __name__ == "__main__":
     print("=" * 60)
     print()
     
-    uvicorn.run(app, host=LISTEN_HOST, port=LISTEN_PORT, log_level="info")
+    uvicorn.run(app, **uvicorn_kwargs)

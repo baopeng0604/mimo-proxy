@@ -163,11 +163,13 @@ chmod +x start-proxy.sh start-proxy-uv.sh
 
 | 平台   | asyncio 默认事件循环 | 说明 |
 | ------ | -------------------- | ---- |
-| Windows | Proactor | 流式响应结束、连接关闭时，事件循环回调会对**已关闭的 socket 再次 `shutdown()`**，抛出无害的 `ConnectionResetError: [WinError 10054]`。不影响任何请求结果，纯日志噪音。代理已内置修复：启动时（仅 Windows）自动切换为 **Selector** 事件循环（见 `mimo_proxy.py` 的 `__main__` 块）。 |
-| Linux  | Selector | 默认就是 Selector 事件循环，不存在上述问题；代码中的 `if sys.platform == "win32":` 分支**不会执行**，完全不受影响。 |
+| Windows | Proactor | **uvicorn 0.36+ 在 Windows 上强制使用 Proactor 事件循环**（见 `uvicorn/loops/asyncio.py`）。Proactor 在连接关闭时会对**已关闭的 socket 再次 `shutdown()`**，抛出无害的 `ConnectionResetError: [WinError 10054]`。不影响任何请求结果，纯日志噪音，**但已实测解决**：代理提供 `mimo_loop.py` 自定义 Selector 事件循环工厂，`mimo_proxy.py` 启动时**仅 Windows** 通过 `loop="mimo_loop:selector_loop_factory"` 传给 uvicorn，连接断开场景实测不再出现 10054。 |
+| Linux  | Selector | 默认就是 Selector 事件循环，不存在上述问题；`mimo_proxy.py` 只在 `sys.platform == "win32"` 时传自定义 loop 参数，Linux 上**完全不生效**，无任何影响。 |
 | macOS  | Selector | 同 Linux，不受影响。 |
 
-> 细节：切换事件循环的代码被 `if sys.platform == "win32":` 条件严格限定，并包在 `try/except` 里（即使某环境不支持也不会报错）。因此 **Linux / macOS 上该分支直接跳过，不会引入任何行为变化**，部署在 Linux systemd 服务（见下节）时无需任何额外处理。
+> 细节：`mimo_proxy.py` 的 `__main__` 块里，只有 `sys.platform == "win32"` 才会在 `uvicorn.run(**)` 参数中加入 `loop="mimo_loop:selector_loop_factory"`；`mimo_loop.py` 也只是在 Windows 上才会被加载。因此 **Linux / macOS 上这些代码直接跳过，不会引入任何行为变化**，部署在 Linux systemd 服务（见下节）时无需任何额外处理。
+>
+> 备注：如果 Windows 上仍想观察该噪音是否出现，可查看启动日志——正常情况下连接断开后日志只有 uvicorn 的 access log，不再有 `Exception in callback` / `WinError 10054` traceback。
 
 ---
 
