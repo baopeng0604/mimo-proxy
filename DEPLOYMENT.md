@@ -153,10 +153,25 @@ chmod +x start-proxy.sh start-proxy-uv.sh
 | 仅第一轮正常，多轮工具调用后 400         | 确认代理在运行；小米原生接口无法规避该限制，必须走代理                 |
 | 想临时绕过代理                           | 模型改为 `mimo-v2.5`（标准版校验宽松），可直连官方接口                 |
 | 启动时 MIMO_API_BASE 不是 .env 里的值    | 确认 `.env` 在项目根目录（与 `mimo_proxy.py` 同级）；改动后重启         |
+| Windows 日志刷 `ConnectionResetError: [WinError 10054]` | 无害噪音，代理已内置修复，详见「七、平台差异说明」；重启代理生效 |
 
 ---
 
-## 七、Linux 服务器：部署为 systemd 服务（开机自启 + 崩溃自动重启）
+## 七、平台差异说明（Windows / Linux / macOS）
+
+**结论：代码在所有平台行为一致，平台差异只影响日志噪音，不影响任何功能。**
+
+| 平台   | asyncio 默认事件循环 | 说明 |
+| ------ | -------------------- | ---- |
+| Windows | Proactor | 流式响应结束、连接关闭时，事件循环回调会对**已关闭的 socket 再次 `shutdown()`**，抛出无害的 `ConnectionResetError: [WinError 10054]`。不影响任何请求结果，纯日志噪音。代理已内置修复：启动时（仅 Windows）自动切换为 **Selector** 事件循环（见 `mimo_proxy.py` 的 `__main__` 块）。 |
+| Linux  | Selector | 默认就是 Selector 事件循环，不存在上述问题；代码中的 `if sys.platform == "win32":` 分支**不会执行**，完全不受影响。 |
+| macOS  | Selector | 同 Linux，不受影响。 |
+
+> 细节：切换事件循环的代码被 `if sys.platform == "win32":` 条件严格限定，并包在 `try/except` 里（即使某环境不支持也不会报错）。因此 **Linux / macOS 上该分支直接跳过，不会引入任何行为变化**，部署在 Linux systemd 服务（见下节）时无需任何额外处理。
+
+---
+
+## 八、Linux 服务器：部署为 systemd 服务（开机自启 + 崩溃自动重启）
 
 适合把代理长期跑在 Linux 服务器上，重启服务器自动拉起、进程崩溃自动恢复。
 脚本在仓库 `deploy/` 目录：`install.sh`（安装/更新）、`uninstall.sh`（卸载）。
@@ -244,7 +259,7 @@ API Key 填真实小米 key（代理透传鉴权）。
 
 ---
 
-## 八、清理卸载
+## 九、清理卸载
 
 直接删除整个 `mimo-proxy` 文件夹即可。虚拟环境（`.venv`）都在项目目录内，无全局污染。
 
