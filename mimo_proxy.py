@@ -412,6 +412,16 @@ if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+    # Windows 下默认的 Proactor 事件循环在连接关闭时会在回调里对已关闭的
+    # socket 再次 shutdown，抛出无害但刷屏的 ConnectionResetError (WinError 10054)。
+    # 换成 Selector 事件循环可消除该噪音（Linux 不受影响，无需处理）。
+    if sys.platform == "win32":
+        import asyncio
+        try:
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        except Exception:
+            pass
+
     import uvicorn
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
     log.info("🚀 MiMo Proxy v1.4 on %s:%d → %s", LISTEN_HOST, LISTEN_PORT, MIMO_API_BASE)
