@@ -137,6 +137,15 @@ journalctl -u mimo-proxy -f
 - 降级处理（剥离 tool_calls）会导致模型丢失工具调用的上下文
 - 仅支持 OpenAI 兼容的 `/v1/chat/completions` 端点
 
+## 远程网页控制台
+
+代理内置一个**只读**远程控制台（`console.py`），用于浏览器远程查看：
+
+- **状态指示**：绿点 = 运行正常；红点 = 服务不可达 或 近期日志有报错。
+- **实时终端**：网页实时输出命令行日志，报错着色、自动滚动。
+
+在 `.env` 里设置 `CONSOLE_TOKEN` 后，访问 `http://<服务器IP>:8899/console` 输入口令即可使用（不设置则无口令保护，仅建议本机调试）。详见 [DEPLOYMENT.md](DEPLOYMENT.md#九远程网页控制台可选)。
+
 ## 相关链接
 
 - [小米 MiMo API 官方公告](https://platform.xiaomimimo.com/docs/zh-CN/usage-guide/passing-back-reasoning_content)

@@ -23,6 +23,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
+import console
+
 # ─── 配置 ──────────────────────────────────────────────────────
 # 显式指定 .env 为脚本所在目录下的文件（避免从其他目录启动时找不到）
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -402,6 +404,7 @@ routes = [
     Route("/models", list_models),
     Route("/v1/chat/completions", chat_completions, methods=["POST"]),
     Route("/chat/completions", chat_completions, methods=["POST"]),
+    *console.console_routes,
 ]
 
 app = Starlette(routes=routes, lifespan=lifespan)
@@ -431,6 +434,7 @@ if __name__ == "__main__":
 
     import uvicorn
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
+    console.install_ring_handler()
     log.info("🚀 MiMo Proxy v1.4 on %s:%d → %s", LISTEN_HOST, LISTEN_PORT, MIMO_API_BASE)
     
     # 显示正确的 Trae 配置地址
@@ -443,6 +447,11 @@ if __name__ == "__main__":
         s.close()
     except Exception:
         pass
+
+    if console.CONSOLE_TOKEN:
+        log.info("🖥️  远程控制台: http://%s:%d/console（口令保护已启用）", local_ip, LISTEN_PORT)
+    else:
+        log.warning("⚠️  CONSOLE_TOKEN 未配置，远程控制台 /console 当前无口令保护。建议在 .env 中设置后再公网使用。")
     
     print()
     print("=" * 60)
