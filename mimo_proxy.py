@@ -31,6 +31,11 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 
 # 必须在 load_dotenv() 之后用 os.getenv 读取，才有 .env 中的值；否则是硬编码默认值
 MIMO_API_BASE = os.getenv("MIMO_API_BASE", "https://token-plan-cn.xiaomimimo.com/v1")
+# .env 中的密钥（默认代码不读它，仅在开启密钥注入时作为兜底）
+MIMO_API_KEY = os.getenv("MIMO_API_KEY", "")
+# 是否启用 .env 密钥注入：客户端没带 Authorization 时，用 MIMO_API_KEY 注入。
+# 默认关闭（纯透传）。置 KEY_INJECTION=true 启用。
+KEY_INJECTION_ENABLED = os.getenv("KEY_INJECTION", "false").strip().lower() in ("1", "true", "yes", "on")
 LISTEN_HOST = "0.0.0.0"
 LISTEN_PORT = 8899
 CACHE_MAX_SIZE = 2000
@@ -160,6 +165,20 @@ def cache_reasoning_from_message(msg: dict):
         log.info("📦 Cached reasoning [%s] (%d chars) tc_ids=%s", h[:8], len(rc), tc_ids)
 
 
+# ─── 鉴权头构造 ────────────────────────────────────────────────
+
+def _build_auth_headers(request: Request) -> dict:
+    headers = {}
+    auth = request.headers.get("authorization")
+    if auth:
+        # 客户端带了就用客户端的
+        headers["authorization"] = auth
+    elif KEY_INJECTION_ENABLED and MIMO_API_KEY:
+        # 客户端没带 & 开启了注入 & .env 里有 key → 用 .env 注入
+        headers["authorization"] = f"Bearer {MIMO_API_KEY}"
+    return headers
+
+
 # ─── SSE 流式处理 ──────────────────────────────────────────────
 
 def _sse(data: str) -> bytes:
@@ -280,10 +299,7 @@ async def chat_completions(request: Request):
     if injected or degraded:
         log.info("🔧 Injected=%d, Degraded=%d", injected, degraded)
 
-    headers = {}
-    auth = request.headers.get("authorization")
-    if auth:
-        headers["authorization"] = auth
+    headers = _build_auth_headers(request)
 
     is_stream = body.get("stream", False)
     upstream = f"{MIMO_API_BASE}/chat/completions"
@@ -361,10 +377,7 @@ async def chat_completions(request: Request):
 
 
 async def list_models(request: Request):
-    headers = {}
-    auth = request.headers.get("authorization")
-    if auth:
-        headers["authorization"] = auth
+    headers = _build_auth_headers(request)
     client = _get_client()
     try:
         resp = await client.get(f"{MIMO_API_BASE}/models", headers=headers)
@@ -436,6 +449,10 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
     console.install_ring_handler()
     log.info("🚀 MiMo Proxy v1.4 on %s:%d → %s", LISTEN_HOST, LISTEN_PORT, MIMO_API_BASE)
+    if KEY_INJECTION_ENABLED and MIMO_API_KEY:
+        log.info("🔑 .env 密钥注入已启用：客户端未带 Authorization 时将使用 MIMO_API_KEY（客户端带则优先）")
+    else:
+        log.info("🔑 密钥为纯透传模式（未启用 .env 注入）")
     
     # 显示正确的 Trae 配置地址
     import socket

@@ -33,10 +33,11 @@ Trae / Harness / 任意 OpenAI 兼容客户端
 
 要点：
 
-- **鉴权是透传的**：代理不校验、不替换密钥，客户端请求里的 `Authorization` 头会原样发给小米 API。
+- **鉴权默认是透传的**：代理不校验、不替换密钥，客户端请求里的 `Authorization` 头会原样发给小米 API。
   因此客户端填写的 API Key **必须是真实有效的小米 key**（`tp-` 或 `sk-` 开头），随便填会被小米拒绝（401）。
-- **`.env` 中的 `MIMO_API_KEY` 当前代码并不读取**（代码只读 `MIMO_API_BASE`）。它可以留着当备忘，
-  但真正生效的鉴权来自客户端请求头。（如果希望"客户端随便填、代理统一从 `.env` 注入 key"，见文末「可选：启用 .env 密钥注入」。）
+  若希望"客户端随便填、代理统一从 `.env` 注入 key"，见文末「附录：启用 .env 密钥注入」。
+- **`.env` 中的 `MIMO_API_KEY` 默认不读取**（代码只读 `MIMO_API_BASE`）。它是 `.env` 里预留的密钥，
+  只在开启了「密钥注入」时作为客户端没带 key 的兜底使用。
 - **`.env` 的加载已内置**：`mimo_proxy.py` 顶部已经写好 `load_dotenv()` + `os.getenv()`，
   启动时会自动读取脚本所在目录的 `.env`，**不需要再手动修改代码**。
 - 缓存为内存缓存（重启即清空），`CACHE_MAX_SIZE=2000` 条、TTL 2 小时。
@@ -303,19 +304,22 @@ http://<服务器IP>:8899/console
 
 ---
 
-## 附录：可选——启用 `.env` 密钥注入（让客户端随便填 key）
+## 附录：启用 `.env` 密钥注入（让客户端随便填 key）
 
-当前代码是**透传**客户端 `Authorization` 头。如果你希望客户端随意填 key、
-由代理统一从 `.env` 的 `MIMO_API_KEY` 注入真实密钥，可以把 `mimo_proxy.py` 中
-`chat_completions` 和 `list_models` 两处构造 `headers` 的地方改成：
+默认行为是**透传**客户端 `Authorization` 头。如果你希望客户端随意填 key、
+由代理统一从 `.env` 的 `MIMO_API_KEY` 注入真实密钥，只需在 `.env` 里打开开关：
 
-```python
-headers = {}
-auth = request.headers.get("authorization")
-if auth:
-    headers["authorization"] = auth          # 客户端带了就用客户端的
-elif os.getenv("MIMO_API_KEY"):
-    headers["authorization"] = f"Bearer {os.getenv('MIMO_API_KEY')}"  # 没带则用 .env 注入
+```env
+KEY_INJECTION=true
 ```
 
-注意：注入模式会让所有客户端共享同一个 key，适合个人本地使用；多用户场景建议保持透传。
+开启后的规则：
+
+- 客户端带了 `Authorization` → **仍用客户端的**（客户端优先）。
+- 客户端没带 → 用 `.env` 的 `MIMO_API_KEY` 兜底注入 `Bearer ...`。
+
+关闭（不设置或 `KEY_INJECTION=false`）时行为不变，仍是纯透传。开关通过环境变量
+`KEY_INJECTION`（`true/1/yes` 均视为开启）控制。
+
+> 注意：注入模式会让所有没带 key 的客户端共享同一个 key，适合个人/内网使用；
+> 多用户场景建议保持透传。
